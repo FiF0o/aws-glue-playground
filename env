@@ -1,0 +1,4 @@
+export TF_VAR_AWS_REGION="eu-west-2"
+export TF_VAR_aws_access_key=""
+export TF_VAR_aws_secret_key=""
+export TF_VAR_aws_account_id=""

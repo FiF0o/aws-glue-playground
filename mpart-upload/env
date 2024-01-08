@@ -10,3 +10,4 @@ export key=""
 export uploadid=""
 # cmk key key (customer managed)
 export kms_key=""
+export aws_user=""

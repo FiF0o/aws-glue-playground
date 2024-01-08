@@ -6,16 +6,104 @@ Multipart upload is performed on existing s3 bucket with aws user/cli
 ## Pre-requisites
 
 - As a prequiste set the env file. Default Region is eu-west-2.
-- Bucket must be created
+- Bucket, KMS Key, User must be created
 - content must be bigger than 5MiB, add it to the repo
 - set your .env file
+- Permissions/Policies:
+
+### user policy
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "kmsAndMultipartUpload",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucketMultipartUploads",
+        "kms:Decrypt",
+        "s3:GetObjectVersionTagging",
+        "s3:ListBucket",
+        "s3:GetBucketVersioning",
+        "s3:ListMultipartUploadParts",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:AbortMultipartUpload",
+        "kms:Encrypt",
+        "s3:GetObjectVersionAcl",
+        "kms:GenerateDataKey",
+        "s3:GetObjectTagging",
+        "kms:DescribeKey",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": [
+        "arn:aws:s3:::<aws_s3_bucket>",
+        "arn:aws:s3:::<aws_s3_bucket>/*",
+        "arn:aws:kms:eu-west-2:<account>:key/<kms_key>"
+      ]
+    }
+  ]
+}
+```
+
+### kms key
+
+_(Shortened policy for brevity)_
+
+```json
+{
+            "Sid": "Allow use of the key",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::<account>:user/<aws_user>"
+                ]
+            },
+            "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+            ],
+            "Resource": "*"
+        },
+```
+
+### Bucket
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BucketForUser",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<account>:user/<aws_user>"
+      },
+      "Action": [
+        "s3:PutObject",
+        "s3:ListBucketMultipartUploads",
+        "s3:ListMultipartUploadParts",
+        "s3:GetObject",
+        "s3:AbortMultipartUpload",
+        "s3:GetBucketTagging",
+        "s3:PutObjectTagging"
+      ],
+      "Resource": [
+        "arn:aws:s3:::<aws_s3_bucket>",
+        "arn:aws:s3:::<aws_s3_bucket>/*"
+      ]
+    }
+  ]
+}
+```
 
 ## Does not include
 
-Resource permissions as script performed with cli:
-
-- S3 Bucket (ListMultiPartUpload, etc..)
-- assume Role (CreateMultiPartUpload, UploadPart, CompleteMultipartUpload)
+script currently performed by a user and does not include assumeRole permission - cli is used as POC.
 
 ## Scripts
 
@@ -57,7 +145,7 @@ split -d -a3 -n 2 ${key} mtpu_
 # or split by size/line
 
 # request multipart upload (UploadId) to bucket
-aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key} --server-side-encryption aws:kms --ssekms-key-id ${kms_key}
+aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key} --server-side-encryption aws:kms --ssekms-key-id ${kms_key} --profile ${aws_user}
 
 ```
 
@@ -79,9 +167,9 @@ aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key} --serve
 
 ```sh
 # upload chunks (2 parts)
-aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 1 --body mtpu_000 --upload-id ${uploadid}
+aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 1 --body mtpu_000 --upload-id ${uploadid} --profile ${aws_user}
 
-aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 2 --body mtpu_001 --upload-id ${uploadid}
+aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 2 --body mtpu_001 --upload-id ${uploadid} --profile ${aws_user}
 
 ```
 
@@ -110,7 +198,7 @@ aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 2 --b
 
 ```sh
 # Issue mpart upload completion passing file meta for aws to reassemble chunks into one file
-aws s3api complete-multipart-upload --multipart-upload file://parts.json --bucket ${aws_s3_bucket} --key ${key} --upload-id ${uploadid}
+aws s3api complete-multipart-upload --multipart-upload file://parts.json --bucket ${aws_s3_bucket} --key ${key} --upload-id ${uploadid} --profile ${aws_user}
 ```
 
 ```sh

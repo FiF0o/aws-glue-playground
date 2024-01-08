@@ -16,7 +16,6 @@ Resource permissions as script performed with cli:
 
 - S3 Bucket (ListMultiPartUpload, etc..)
 - assume Role (CreateMultiPartUpload, UploadPart, CompleteMultipartUpload)
-- KMS
 
 ## Scripts
 
@@ -30,7 +29,7 @@ Limitations: https://docs.aws.amazon.com/en_us/AmazonS3/latest/userguide/qfacts.
 
 ### steps
 
-0. create tarball
+0. create tarball - `tar -czvf archive-name.tar.gz tarball`
 1. split file into chunks
 2. request multipart upload id
 3. upload chunks
@@ -58,7 +57,7 @@ split -d -a3 -n 2 ${key} mtpu_
 # or split by size/line
 
 # request multipart upload (UploadId) to bucket
-aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key}
+aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key} --server-side-encryption aws:kms --ssekms-key-id ${kms_key}
 
 ```
 
@@ -67,10 +66,12 @@ aws s3api create-multipart-upload --bucket ${aws_s3_bucket} --key ${key}
 ```sh
 # returns UploadId to be used for upload and completing operations
 {
-    "ServerSideEncryption": "AES256",
-    "Bucket": "<bucket-name>",
-    "Key": "<yourKey>",
-    "UploadId": "<uploadIdToBeUsed>"
+    "ServerSideEncryption": "aws:kms",
+    "SSEKMSKeyId": "<kmsKey>",
+    "BucketKeyEnabled": true,
+    "Bucket": "<bucketName>",
+    "Key": "archive-name.tar.gz",
+    "UploadId": "<uploadId>"
 }
 ```
 
@@ -90,14 +91,18 @@ aws s3api upload-part --bucket ${aws_s3_bucket} --key ${key} --part-number 2 --b
 # returns parts to used in the part.json for AWS to reassemble file when completing mpart upload
 # part 1
 {
-    "ServerSideEncryption": "AES256",
-    "ETag": "\"4436236917a37a61cc63ef2d96f70916\""
+    "ServerSideEncryption": "aws:kms",
+    "ETag": "\"df64803ab538dd59fff3e032a0d23383\"",
+    "SSEKMSKeyId": "<kmsKey>",
+    "BucketKeyEnabled": true
 }
 
 # part 2
 {
-    "ServerSideEncryption": "AES256",
-    "ETag": "\"31062992c59103d1ed29960fa06d07f1\""
+    "ServerSideEncryption": "aws:kms",
+    "ETag": "\"df64803ab538dd59fff3e032a0d23383\"",
+    "SSEKMSKeyId": "<kmsKey>",
+    "BucketKeyEnabled": true
 }
 ```
 
@@ -112,11 +117,13 @@ aws s3api complete-multipart-upload --multipart-upload file://parts.json --bucke
 # Sample ok response
 
 {
-    "ServerSideEncryption": "AES256",
-    "Location": "<path to s3 bucket>",
-    "Bucket": "<your bucket>",
-    "Key": "mixkit-going-down-a-curved-highway-through-a-mountain-range-41576-4k.mp4",
-    "ETag": "\"efbecc7ce8bedda1338b7b69ca9a4b8c-2\""
+    "ServerSideEncryption": "aws:kms",
+    "SSEKMSKeyId": "<kmsKey>",
+    "BucketKeyEnabled": true,
+    "Location": "<bucketLocation>",
+    "Bucket": "<bucketName>",
+    "Key": "archive-name.tar.gz",
+    "ETag": "\"7078ecf608717cc12d8d3e6afe8babe6-2\""
 }
 
 ```

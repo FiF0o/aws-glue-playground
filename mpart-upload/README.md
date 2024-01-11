@@ -1,19 +1,20 @@
 # Multipart upload
 
 No tf scripts are available for that module.
-Multipart upload is performed on existing s3 bucket with aws user/cli
+Multipart upload is performed on existing s3 bucket with aws cli (user or role)
 
 ## Pre-requisites
 
-- As a prequiste set the env file. Default Region is eu-west-2.
-- Bucket, KMS Key, User must be created
+- As a prequiste set the env file. Default Region is `eu-west-2`.
+- Bucket, KMS Key, User must be created, Policy & Role are additional (sts:AssumeRole)
 - content must be bigger than 5MiB, add it to the repo
 - set your .env file
 - Permissions/Policies:
 
-### user policy
+### multipart user policy
 
 ```json
+// mpart-user-policy.json
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -103,7 +104,82 @@ _(Shortened policy for brevity)_
 
 ## Does not include
 
-script currently performed by a user and does not include assumeRole permission - cli is used as POC.
+### sts:AssumeRole
+
+Script currently performed by a user and does not include `sts:AssumeRole` permissions - CLI is used as POC.
+
+### Changes for sts:AssumeRole
+
+For assumed role do the following steps:
+
+- user has been created or your existing user (e.g. `MultipartUser`), has `sts:AssumeRole` policy attached and profile set in the cli as `multipart-profile`:
+
+`aws iam create-user --user-name MultipartUser`
+`aws iam create-access-key --user-name MultipartUser`
+`aws configure --profile multipart-profile`
+
+- Add trust relationship to a role so it can be assumed:
+
+```json
+// trust-policy.json
+// trust relationship policy for multipart user
+// can be set on user basis
+{
+  "Version": "2012-10-17",
+  "Statement": {
+    "Effect": "Allow",
+    "Principal": {
+      "AWS": "<aws_account>"
+    },
+    "Action": "sts:AssumeRole"
+  }
+}
+```
+
+- Existing `mpart-user-policy.json` policy is reused and to be attached to user, add `sts:AssumeRole` permission.
+- Create a role and attach the trust relationship the existing policy so user can assume it:
+
+`aws iam create-role --role-name multipart-role --assume-role-policy-document file://trust-policy.json`
+
+`aws iam attach-role-policy --role-name multipart-role --policy-arn "arn:aws:iam::<aws_account>:policy/mpart-user-policy"`
+
+- Remplace user arns by role arns of your resources e.g. `arn:aws:iam::<account>:role/multipart-role` - kms key, user policy, bucket
+
+- `--profile` does not need to be passed as the role is assumed by the user, remove the flags from multipart upload scripts
+
+- Assume the role, and then set your credentials (or source `.env`):
+
+`aws sts assume-role --role-arn "arn:aws:iam::<aws_account>:role/multipart-role" --role-session-name AWSCLI-Session --profile multipart-profile`
+
+```json
+// response containing credentials
+{
+  "Credentials": {
+    "AccessKeyId": "<AccessKeyId>",
+    "SecretAccessKey": "<SecretAccessKey>",
+    "SessionToken": "<SessionToken>",
+    "Expiration": "2024-01-11T16:35:51+00:00"
+  },
+  "AssumedRoleUser": {
+    "AssumedRoleId": "<AssumedRoleId>:AWSCLI-Session",
+    "Arn": "arn:aws:sts::<account>:assumed-role/multipart-role/AWSCLI-Session"
+  }
+}
+```
+
+- Check that role is assumed
+
+`aws sts get-caller-identity`
+
+```json
+{
+  "UserId": "<UserId>:AWSCLI-Session",
+  "Account": "<aws_account>",
+  "Arn": "arn:aws:sts::aws_account:assumed-role/multipart-role/AWSCLI-Session"
+}
+```
+
+- run the steps below
 
 ## Scripts
 
